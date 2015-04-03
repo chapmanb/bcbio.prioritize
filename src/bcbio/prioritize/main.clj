@@ -1,5 +1,8 @@
 (ns bcbio.prioritize.main
-  (:require [clojure.java.io :as io]
+  (:require [bcbio.prioritize.create :as create]
+            [bcbio.prioritize.known :as known]
+            [bcbio.prioritize.missing :as missing]
+            [clojure.java.io :as io]
             [taoensso.timbre :as timbre])
   (:gen-class))
 
@@ -14,7 +17,13 @@
     (println "bcbio.prioritize" version)))
 
 (def ^{:private true} progs
-  {:version {:main version
+  {:createdb {:main create/-main
+              :doc "Create database of priority regions based on genes and existing biological evidence"}
+   :known {:main known/-main
+           :doc "Prioritize a set of calls with a set of known regions of interest"}
+   :missing {:main missing/-main
+             :doc "Identify regions with missing coverage based on regions of interest"}
+   :version {:main version
              :doc "Print version"}})
 
 (defn -main [& args]

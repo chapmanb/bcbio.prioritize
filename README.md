@@ -7,9 +7,23 @@ set of high quality small or structural variant calls. Given information on
 coverage, it will be able to identify poorly covered regions in potential genes
 of interest.
 
-This is currently exploratory work in progress.
+This is exploratory work in progress.
 
 ## Usage
+
+Create a database of priority regions based on gene and domain regions with
+biological evidence:
+
+    bcbio-prioritize createdb known.db transcript.bed known_input.vcf known_input.bed
+
+Prioritize a set of structural variant calls in BED format given a database of
+regions:
+
+    bcbio-prioritize known known.db calls.bed > calls-known.bed
+
+Identify regions missing sufficient sequencing coverage:
+
+    bcbio-prioritize missing known.db coverage.db > known-missing.bed
 
 ## License
 
