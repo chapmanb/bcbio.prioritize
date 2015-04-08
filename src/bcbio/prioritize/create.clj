@@ -1,19 +1,27 @@
 (ns bcbio.prioritize.create
   "Create database of priority regions based on genes and existing biological evidence"
   (:require [bcbio.run.clhelp :as clhelp]
+            [bcbio.run.itx :as itx]
+            [bcbio.run.fsp :as fsp]
+            [bcbio.prioritize.utils :as utils]
+            [clojure.java.io :as io]
             [clojure.string :as string]
             [clojure.tools.cli :refer [parse-opts]]))
 
 (defn from-known
   "Create a new database grouped by bins with information from the known input files."
-  [bin-file known-files out-file])
+  [bin-file known-files out-file]
+  (itx/with-named-tempdir [work-dir (str (fsp/file-root out-file) "-work")]
+    (let [prep-bin (utils/bgzip-index bin-file work-dir)
+          prep-known (map #(utils/bgzip-index % work-dir) known-files)]
+      (println prep-bin prep-known))))
 
 (defn- usage [options-summary]
   (->> ["Create a database of priority regions based on gene and domain regions with biological evidence:"
         ""
         "Usage: bcbio-prioritize createdb [options] -o output-db -b summary-bins -k known-input"
         ""
-        "  output-db   : Output database to use in subsequent prioritization"
+        "  output-db   : Output database to use in subsequent prioritization (a bed.gz file)"
         "  summary-bins: BED file to guide binning of known variations. Can be transcript"
         "                or domain based"
         "  known-input : Known variations to apply to summary bins. Can be BED or VCF files and"
