@@ -1,12 +1,39 @@
 (ns bcbio.prioritize.create
   "Create database of priority regions based on genes and existing biological evidence"
+  (:import [htsjdk.tribble AbstractFeatureReader]
+           [htsjdk.tribble.readers TabixReader]
+           [htsjdk.tribble.bed BEDCodec])
   (:require [bcbio.run.clhelp :as clhelp]
             [bcbio.run.itx :as itx]
             [bcbio.run.fsp :as fsp]
             [bcbio.prioritize.utils :as utils]
             [clojure.java.io :as io]
             [clojure.string :as string]
-            [clojure.tools.cli :refer [parse-opts]]))
+            [clojure.tools.cli :refer [parse-opts]]
+            [gavagai.core :as gavagai]))
+
+(defmulti hit->rec
+  "Convert a hit into an annotation specific record"
+  (fn [f hit]
+    (cond
+      (.contains (string/lower-case f) "cosmic") :cosmic)))
+
+(defmethod hit->rec :cosmic
+  [_ hit]
+  (println hit))
+
+(defn- find-hits-one
+  "Find elements from a single input in a region"
+  [cur-bin known]
+  (println cur-bin)
+  (with-open [reader (TabixReader. known)]
+    (let [q (.query reader (:chr cur-bin) (:start cur-bin) (:end cur-bin))]
+      (vec (map (partial hit->rec known) (take-while (complement nil?) (repeatedly #(.next q))))))))
+
+(defn- find-hits-many
+  "Retrieve hits found in the known inputs files by region."
+  [cur-bin knowns]
+  (mapcat (partial find-hits-one cur-bin) knowns))
 
 (defn from-known
   "Create a new database grouped by bins with information from the known input files."
@@ -14,6 +41,11 @@
   (itx/with-named-tempdir [work-dir (str (fsp/file-root out-file) "-work")]
     (let [prep-bin (utils/bgzip-index bin-file work-dir)
           prep-known (map #(utils/bgzip-index % work-dir) known-files)]
+      (with-open [bin-reader (AbstractFeatureReader/getFeatureReader prep-bin (BEDCodec.) false)]
+        (gavagai/with-translator (gavagai/register-converters
+                                  [["htsjdk.tribble.bed.FullBEDFeature" :only [:chr :start :end :name]]])
+          (doseq [cur-bin (map gavagai/translate (.iterator bin-reader))]
+            (find-hits-many cur-bin prep-known))))
       (println prep-bin prep-known))))
 
 (defn- usage [options-summary]

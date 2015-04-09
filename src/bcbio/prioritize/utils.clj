@@ -35,7 +35,7 @@
 (defmethod do-bgzip ".bed.gz"
   [in-file out-dir]
   (let [out-file (str (fsp/file-root in-file out-dir) ".bed.gz")]
-    (when-not (= in-file out-file)
+    (when-not (or (= in-file out-file) (fs/exists? out-file))
       (fs/sym-link out-file in-file))
     [out-file "bed"]))
 
@@ -47,7 +47,7 @@
 (defmethod do-bgzip ".vcf.gz"
   [in-file out-dir]
   (let [out-file (str (fsp/file-root in-file out-dir) ".vcf.gz")]
-    (when-not (= in-file out-file)
+    (when-not (or (= in-file out-file) (fs/exists? out-file))
       (fs/sym-link out-file in-file))
     [out-file "vcf"]))
 
