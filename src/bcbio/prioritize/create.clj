@@ -1,6 +1,7 @@
 (ns bcbio.prioritize.create
   "Create database of priority regions based on genes and existing biological evidence"
-  (:import [htsjdk.tribble AbstractFeatureReader]
+  (:import [htsjdk.samtools.util BlockCompressedOutputStream]
+           [htsjdk.tribble AbstractFeatureReader]
            [htsjdk.tribble.readers TabixReader]
            [htsjdk.tribble.bed BEDCodec])
   (:require [bcbio.run.clhelp :as clhelp]
@@ -20,12 +21,12 @@
 
 (defmethod hit->rec :cosmic
   [_ hit]
-  (println hit))
+  {:origin "cosmic"
+   :id (nth (string/split hit #"\t") 2)})
 
 (defn- find-hits-one
   "Find elements from a single input in a region"
   [cur-bin known]
-  (println cur-bin)
   (with-open [reader (TabixReader. known)]
     (let [q (.query reader (:chr cur-bin) (:start cur-bin) (:end cur-bin))]
       (vec (map (partial hit->rec known) (take-while (complement nil?) (repeatedly #(.next q))))))))
@@ -35,18 +36,32 @@
   [cur-bin knowns]
   (mapcat (partial find-hits-one cur-bin) knowns))
 
+(defn- bin->known-bed
+  "Convert a bin region into a BED compatible output file with output information."
+  [prep-known cur-bin]
+  (when-let [support (seq (find-hits-many cur-bin prep-known))]
+    (assoc cur-bin :name
+           (pr-str {:support support
+                    :name (:name cur-bin)}))))
+
 (defn from-known
   "Create a new database grouped by bins with information from the known input files."
   [bin-file known-files out-file]
   (itx/with-named-tempdir [work-dir (str (fsp/file-root out-file) "-work")]
-    (let [prep-bin (utils/bgzip-index bin-file work-dir)
-          prep-known (map #(utils/bgzip-index % work-dir) known-files)]
-      (with-open [bin-reader (AbstractFeatureReader/getFeatureReader prep-bin (BEDCodec.) false)]
-        (gavagai/with-translator (gavagai/register-converters
-                                  [["htsjdk.tribble.bed.FullBEDFeature" :only [:chr :start :end :name]]])
-          (doseq [cur-bin (map gavagai/translate (.iterator bin-reader))]
-            (find-hits-many cur-bin prep-known))))
-      (println prep-bin prep-known))))
+    (itx/with-tx-file [tx-out-file out-file]
+      (let [prep-bin (utils/bgzip-index bin-file work-dir)
+            prep-known (map #(utils/bgzip-index % work-dir) known-files)]
+        (with-open [bin-reader (AbstractFeatureReader/getFeatureReader prep-bin (BEDCodec.) false)
+                    wtr (io/writer (BlockCompressedOutputStream. tx-out-file))]
+          (gavagai/with-translator (gavagai/register-converters
+                                    [["htsjdk.tribble.bed.FullBEDFeature" :only [:chr :start :end :name]]])
+            (doseq [cur-bin (->> (.iterator bin-reader)
+                                 (map gavagai/translate)
+                                 (map (partial bin->known-bed prep-known))
+                                 (remove nil?))]
+              (.write wtr (str (string/join "\t" (map cur-bin [:chr :start :end :name]))
+                               "\n"))))))))
+  (utils/bgzip-index out-file))
 
 (defn- usage [options-summary]
   (->> ["Create a database of priority regions based on gene and domain regions with biological evidence:"
