@@ -11,15 +11,15 @@ This is exploratory work in progress.
 
 ## Usage
 
-Create a database of priority regions based on gene and domain regions with
-biological evidence:
+Create file of priority regions based on gene and domain regions with biological
+evidence:
 
-    bcbio-prioritize createdb known.db transcript.bed known_input.vcf known_input.bed
+    bcbio-prioritize create -o known.bed.gz -b transcript.bed -k input1.vcf -k input2.bed
 
 Prioritize a set of structural variant calls in BED format given a database of
 regions:
 
-    bcbio-prioritize known known.db calls.bed > calls-known.bed
+    bcbio-prioritize known -k known.bed.gz -t calls.bed.gz -o calls-known.bed.gz
 
 Identify regions missing sufficient sequencing coverage:
 

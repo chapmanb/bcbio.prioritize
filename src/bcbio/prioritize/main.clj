@@ -17,8 +17,8 @@
     (println "bcbio.prioritize" version)))
 
 (def ^{:private true} progs
-  {:createdb {:main create/-main
-              :doc "Create database of priority regions based on genes and existing biological evidence"}
+  {:create {:main create/-main
+              :doc "Create file of priority regions based on genes and existing biological evidence"}
    :known {:main known/-main
            :doc "Prioritize a set of calls with a set of known regions of interest"}
    :missing {:main missing/-main

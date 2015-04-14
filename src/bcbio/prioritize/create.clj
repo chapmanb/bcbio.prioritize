@@ -64,14 +64,14 @@
   (utils/bgzip-index out-file))
 
 (defn- usage [options-summary]
-  (->> ["Create a database of priority regions based on gene and domain regions with biological evidence:"
+  (->> ["Create file of priority regions based on gene and domain regions with biological evidence:"
         ""
-        "Usage: bcbio-prioritize createdb [options] -o output-db -b summary-bins -k known-input"
+        "Usage: bcbio-prioritize create [options] -o output -b summary-bins -k known-input"
         ""
-        "  output-db   : Output database to use in subsequent prioritization (a bed.gz file)"
+        "  output   : Output to use in subsequent prioritization (a bed.gz file)"
         "  summary-bins: BED file to guide binning of known variations. Can be transcript"
         "                or domain based"
-        "  known-input : Known variations to apply to summary bins. Can be BED or VCF files and"
+        "  known-input : Known variations to apply to summary bins. Can be BED or VCF file, and"
         "                specified multiple times"
         ""
         "Options:"
