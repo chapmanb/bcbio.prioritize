@@ -16,10 +16,10 @@ evidence:
 
     bcbio-prioritize create -o known.bed.gz -b transcript.bed -k input1.vcf -k input2.bed
 
-Prioritize a set of structural variant calls in BED format given a database of
-regions:
+Prioritize a set of structural variant calls in BED format given a binned set of known
+changes:
 
-    bcbio-prioritize known -k known.bed.gz -t calls.bed.gz -o calls-known.bed.gz
+    bcbio-prioritize known -i calls.bed.gz -k known.bed.gz -o calls-known.bed.gz
 
 Identify regions missing sufficient sequencing coverage:
 

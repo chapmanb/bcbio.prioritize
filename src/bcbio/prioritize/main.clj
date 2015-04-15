@@ -20,7 +20,7 @@
   {:create {:main create/-main
               :doc "Create file of priority regions based on genes and existing biological evidence"}
    :known {:main known/-main
-           :doc "Prioritize a set of calls with a set of known regions of interest"}
+           :doc "Prioritize a set of calls with based on binned regions of interest"}
    :missing {:main missing/-main
              :doc "Identify regions with missing coverage based on regions of interest"}
    :version {:main version
