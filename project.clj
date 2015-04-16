@@ -3,6 +3,7 @@
   :url "https://github.com/chapmanb/bcbio.prioritize"
   :license {:name "MIT" :url "http://www.opensource.org/licenses/mit-license.html"}
   :dependencies [[org.clojure/clojure "1.6.0"]
+                 [org.clojure/data.csv "0.1.2"]
                  [org.clojure/tools.cli "0.3.1"]
                  [com.taoensso/timbre "3.4.0"]
                  [gavagai "0.3.2"]

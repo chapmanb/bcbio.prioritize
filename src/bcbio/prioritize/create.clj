@@ -5,8 +5,8 @@
            [htsjdk.tribble.readers TabixReader]
            [htsjdk.tribble.bed BEDCodec])
   (:require [bcbio.run.clhelp :as clhelp]
-            [bcbio.run.itx :as itx]
             [bcbio.run.fsp :as fsp]
+            [bcbio.run.itx :as itx]
             [bcbio.prioritize.utils :as utils]
             [clojure.java.io :as io]
             [clojure.string :as string]

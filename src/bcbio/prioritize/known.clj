@@ -1,12 +1,64 @@
 (ns bcbio.prioritize.known
   "Prioritize a set of calls with a set of known regions of interest"
-  (:require [bcbio.run.clhelp :as clhelp]
+  (:require [bcbio.prioritize.utils :as utils]
+            [bcbio.run.clhelp :as clhelp]
+            [bcbio.run.fsp :as fsp]
+            [bcbio.run.itx :as itx]
+            [clojure.data.csv :as csv]
+            [clojure.edn :as edn]
+            [clojure.java.io :as io]
+            [clojure.set :as cset]
             [clojure.string :as string]
             [clojure.tools.cli :refer [parse-opts]]))
 
+(defn- intersect
+  "Intersect two BED files returning a tsv of overlaps."
+  [a-file b-file base-name out-dir]
+  (let [out-file (str (io/file out-dir (str base-name "-intersect.tsv")))]
+    (itx/run-cmd out-file
+                 "bedtools intersect -a ~{a-file} -b ~{b-file} -wa -wb "
+                 "> ~{out-file}")))
+
+(defn- combine-hits
+  "Combine a set of binned hits into a short descriptive string about a call"
+  [hits-plus-coords]
+  (letfn [(merge-hit [coll hit]
+            {:name (conj (get coll :name #{}) (:name hit))
+             :origin (cset/union (get coll :support #{}) (set (map :origin (:support hit))))})
+          (merge->str [coll]
+            (format "%s:%s" (string/join "," (sort (:origin coll)))
+                    (string/join "," (sort (:name coll)))))]
+    (->> hits-plus-coords
+         (map #(edn/read-string (last %)))
+         (reduce merge-hit {})
+         merge->str)))
+
+(defn- summarize-matches [[coords hits]]
+  (conj (vec coords) (combine-hits hits)))
+
+(defn- summarize
+  "Summarize an intersected bedtools TSV file into a prioritized bed"
+  [in-file out-file-orig]
+  (println in-file)
+  (let [out-file (string/replace out-file-orig ".bed.gz" ".bed")]
+    (itx/with-tx-file [tx-out-file out-file]
+      (with-open [rdr (io/reader in-file)
+                  wtr (io/writer out-file)]
+        (as-> rdr $
+          (csv/read-csv $ :separator \tab)
+          (group-by (partial take 3) $)
+          (map summarize-matches $)
+          (csv/write-csv wtr $ :separator \tab))))
+    out-file))
+
 (defn prioritize
   [input-file known-file out-file]
-  (println input-file known-file out-file))
+  (itx/with-named-tempdir [work-dir (str (fsp/file-root out-file) "-work")]
+    (-> input-file
+        (utils/bgzip-index work-dir)
+        (intersect known-file "i2k" work-dir)
+        (summarize out-file)
+        utils/bgzip-index)))
 
 (defn- usage [options-summary]
   (->> ["Prioritize a set of calls with based on binned regions of interest"
