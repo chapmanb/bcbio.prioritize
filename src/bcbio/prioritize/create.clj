@@ -89,5 +89,5 @@
     (cond
       (:help options) (clhelp/exit 0 (usage summary))
       errors (clhelp/exit 1 (clhelp/error-msg errors))
-      missing (clhelp/exit 1 (str (clhelp/error-msg missing) \newline \newline (usage summary)))
+      (not (empty? missing)) (clhelp/exit 1 (str (clhelp/error-msg missing) \newline \newline (usage summary)))
       :else (from-known (:bins options) (:known options) (:output options)))))

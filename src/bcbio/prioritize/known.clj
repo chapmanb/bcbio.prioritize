@@ -39,7 +39,6 @@
 (defn- summarize
   "Summarize an intersected bedtools TSV file into a prioritized bed"
   [in-file out-file-orig]
-  (println in-file)
   (let [out-file (string/replace out-file-orig ".bed.gz" ".bed")]
     (itx/with-tx-file [tx-out-file out-file]
       (with-open [rdr (io/reader in-file)
@@ -48,6 +47,7 @@
           (csv/read-csv $ :separator \tab)
           (group-by (partial take 3) $)
           (map summarize-matches $)
+          (sort-by (fn [[c s & xs]] [c (Integer/parseInt s)]) $)
           (csv/write-csv wtr $ :separator \tab))))
     out-file))
 
@@ -58,7 +58,9 @@
         (utils/bgzip-index work-dir)
         (intersect known-file "i2k" work-dir)
         (summarize out-file)
-        utils/bgzip-index)))
+        utils/bgzip-index))
+  (when (.endsWith out-file ".bed.gz")
+    (fsp/remove-path (string/replace out-file ".bed.gz" ".bed"))))
 
 (defn- usage [options-summary]
   (->> ["Prioritize a set of calls with based on binned regions of interest"
@@ -83,5 +85,5 @@
     (cond
       (:help options) (clhelp/exit 0 (usage summary))
       errors (clhelp/exit 1 (clhelp/error-msg errors))
-      missing (clhelp/exit 1 (str (clhelp/error-msg missing) \newline \newline (usage summary)))
+      (not (empty? missing)) (clhelp/exit 1 (str (clhelp/error-msg missing) \newline \newline (usage summary)))
       :else (prioritize (:input options) (:known options) (:output options)))))

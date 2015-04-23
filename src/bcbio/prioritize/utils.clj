@@ -20,6 +20,8 @@
 
 (defn- bgzip-file
   [in-file out-file]
+  (when-not (itx/up-to-date? out-file in-file)
+    (fsp/remove-path out-file))
   (itx/run-cmd out-file "bgzip -c ~{in-file} > ~{out-file}"))
 
 (defmulti do-bgzip
