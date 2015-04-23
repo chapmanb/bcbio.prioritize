@@ -60,7 +60,8 @@
         (summarize out-file)
         utils/bgzip-index))
   (when (.endsWith out-file ".bed.gz")
-    (fsp/remove-path (string/replace out-file ".bed.gz" ".bed"))))
+    (fsp/remove-path (string/replace out-file ".bed.gz" ".bed")))
+  out-file)
 
 (defn- usage [options-summary]
   (->> ["Prioritize a set of calls with based on binned regions of interest"
