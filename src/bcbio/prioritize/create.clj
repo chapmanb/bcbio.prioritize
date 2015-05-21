@@ -1,8 +1,9 @@
 (ns bcbio.prioritize.create
   "Create database of priority regions based on genes and existing biological evidence"
-  (:import [htsjdk.samtools.util BlockCompressedOutputStream]
+  (:import [htsjdk.samtools.util BlockCompressedOutputStream BlockCompressedInputStream]
            [htsjdk.tribble AbstractFeatureReader]
-           [htsjdk.tribble.readers TabixReader]
+           [htsjdk.variant.vcf VCFCodec]
+           [htsjdk.tribble.readers TabixReader LineIteratorImpl LineReaderUtil]
            [htsjdk.tribble.bed BEDCodec])
   (:require [bcbio.run.clhelp :as clhelp]
             [bcbio.run.fsp :as fsp]
@@ -17,19 +18,40 @@
   "Convert a hit into an annotation specific record"
   (fn [f hit]
     (cond
-      (.contains (string/lower-case f) "cosmic") :cosmic)))
+      (.contains (string/lower-case f) "cosmic") :cosmic
+      (.contains (string/lower-case f) "oncomine") :oncomine)))
 
 (defmethod hit->rec :cosmic
   [_ hit]
   {:origin "cosmic"
-   :id (nth (string/split hit #"\t") 2)})
+   :id (.getID hit)})
+
+(defmethod hit->rec :oncomine
+  [_ hit]
+  {:origin "oncomine"
+   :id (.getID hit)
+   :mutation-class (.getAttribute hit "om_MutClass" "")
+   :patient (.getAttribute hit "om_PATIENT")
+   :cancer (.getAttribute hit "om_Cancer")})
+
+(defmethod hit->rec :default
+  [f hit]
+  (throw (Exception. (str "Need to implement method to convert input file to records: " f))))
 
 (defn- find-hits-one
   "Find elements from a single input in a region"
   [cur-bin known]
-  (with-open [reader (TabixReader. known)]
-    (let [q (.query reader (:chr cur-bin) (:start cur-bin) (:end cur-bin))]
-      (vec (map (partial hit->rec known) (take-while (complement nil?) (repeatedly #(.next q))))))))
+  (with-open [reader (TabixReader. known)
+              liter (LineIteratorImpl. (LineReaderUtil/fromBufferedStream
+                                        (BlockCompressedInputStream. (io/file known))))]
+    (let [q (.query reader (:chr cur-bin) (:start cur-bin) (:end cur-bin))
+          codec (doto (case (last (fsp/split-ext+ known))
+                      ".vcf.gz" (VCFCodec.))
+                  (.readActualHeader liter))]
+      (->> (take-while (complement nil?) (repeatedly #(.next q)))
+           (map #(.decode codec %))
+           (map (partial hit->rec known))
+           vec))))
 
 (defn- find-hits-many
   "Retrieve hits found in the known inputs files by region."
@@ -42,7 +64,8 @@
   (when-let [support (seq (find-hits-many cur-bin prep-known))]
     (assoc cur-bin :name
            (pr-str {:support support
-                    :name (:name cur-bin)}))))
+                    :name (:name cur-bin)})))
+  )
 
 (defn from-known
   "Create a new database grouped by bins with information from the known input files."
