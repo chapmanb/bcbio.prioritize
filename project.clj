@@ -4,6 +4,7 @@
   :license {:name "MIT" :url "http://www.opensource.org/licenses/mit-license.html"}
   :dependencies [[org.clojure/clojure "1.6.0"]
                  [org.clojure/data.csv "0.1.2"]
+                 [semantic-csv "0.1.0"]
                  [org.clojure/tools.cli "0.3.1"]
                  [clj-biosequence "0.2.6"]
                  [clj-http "1.1.1"]
