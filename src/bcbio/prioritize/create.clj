@@ -10,6 +10,7 @@
             [bcbio.run.itx :as itx]
             [bcbio.prioritize.provider.intogen :as intogen]
             [bcbio.prioritize.utils :as utils]
+            [clojure.set :as cset]
             [clojure.java.io :as io]
             [clojure.string :as string]
             [clojure.tools.cli :refer [parse-opts]]
@@ -40,61 +41,56 @@
   (throw (Exception. (str "Need to implement method to convert input file to records: " f))))
 
 (defn- find-hits-one
-  "Find elements from a single input in a region"
-  [cur-bin known]
-  (with-open [reader (TabixReader. known)
-              liter (LineIteratorImpl. (LineReaderUtil/fromBufferedStream
-                                        (BlockCompressedInputStream. (io/file known))))]
-    (let [q (.query reader (:chr cur-bin) (:start cur-bin) (:end cur-bin))
-          codec (doto (case (last (fsp/split-ext+ known))
-                      ".vcf.gz" (VCFCodec.))
-                  (.readActualHeader liter))]
-      (->> (take-while (complement nil?) (repeatedly #(.next q)))
-           (map #(.decode codec %))
-           (map (partial hit->rec known))
-           vec))))
-
-(defn- find-hits-many
-  "Retrieve hits found in the known inputs files by region."
-  [knowns]
+  "Find elements from a single VCF input in a region."
+  [known]
   (fn [cur-bin]
-    (mapcat (partial find-hits-one cur-bin) knowns)))
+    (with-open [reader (TabixReader. known)
+                liter (LineIteratorImpl. (LineReaderUtil/fromBufferedStream
+                                          (BlockCompressedInputStream. (io/file known))))]
+      (let [q (.query reader (:chr cur-bin) (:start cur-bin) (:end cur-bin))
+            codec (doto (case (last (fsp/split-ext+ known))
+                          ".vcf.gz" (VCFCodec.))
+                    (.readActualHeader liter))]
+        (->> (take-while (complement nil?) (repeatedly #(.next q)))
+             (map #(.decode codec %))
+             (map (partial hit->rec known))
+             vec)))))
 
 (defn- bin->known-bed
   "Convert a bin region into a BED compatible output file with output information."
-  [get-known-fn]
+  [get-known-fns]
   (fn [cur-bin]
-    (when-let [support (seq (get-known-fn cur-bin))]
+    (when-let [support (seq (mapcat #(% cur-bin) get-known-fns))]
       (assoc cur-bin :name
-             (pr-str {:support support
+             (pr-str {:support (->> support
+                                    (map #(reduce-kv (fn [m k v] (assoc m k #{v})) {} %))
+                                    (apply merge-with cset/union))
                       :name (:name cur-bin)})))))
 
 (defmulti get-known
   "Create a function to return known supporting information based on inputs."
-  (fn [known-files work-dir]
-    (letfn [(is-intogen? [known-files]
-              (and (= 1 (count known-files))
-                   (.contains (first known-files) "intogen_cancer_drivers")))
-            (is-vcf? [known-files]
-              (every? #(or (.endsWith % ".vcf.gz") (.endsWith % ".vcf")) known-files))]
+  (fn [known-file work-dir]
+    (letfn [(is-intogen? [known-file]
+              (.contains known-file "intogen_cancer_drivers"))
+            (is-vcf? [known-file]
+              (or (.endsWith known-file ".vcf.gz") (.endsWith known-file ".vcf")))]
       (cond
-        (is-vcf? known-files) :vcf
-        (is-intogen? known-files) :intogen))))
+        (is-vcf? known-file) :vcf
+        (is-intogen? known-file) :intogen))))
 
 (defmethod get-known :vcf
   ^{:doc "Retrieve from a set of input VCF files. Handling COSMIC and Oncomine outputs."}
-  [known-files work-dir]
-  (let [prep-known (map #(utils/bgzip-index % work-dir) known-files)]
-    (find-hits-many prep-known)))
+  [known-file work-dir]
+  (find-hits-one (utils/bgzip-index known-file work-dir)))
 
 (defmethod get-known :intogen
   ^{:doc "Retrieve from a directory download from IntoGen."}
-  [known-files _]
-  (intogen/get-known (first known-files)))
+  [known-file _]
+  (intogen/get-known known-file))
 
 (defmethod get-known :default
-  [known-files _]
-  (throw (Exception. (str "Do not know how to prepare input files: " (string/join "," known-files)))))
+  [known-file _]
+  (throw (Exception. (str "Do not know how to prepare input file: " known-file))))
 
 (defn from-known
   "Create a new database grouped by bins with information from the known input files."
@@ -102,7 +98,7 @@
   (itx/with-named-tempdir [work-dir (str (fsp/file-root out-file) "-work")]
     (itx/with-tx-file [tx-out-file out-file]
       (let [prep-bin (utils/bgzip-index bin-file work-dir)
-            get-known-fn (bin->known-bed (get-known known-files work-dir))]
+            get-known-fn (bin->known-bed (map #(get-known % work-dir) known-files))]
       (with-open [bin-reader (AbstractFeatureReader/getFeatureReader prep-bin (BEDCodec.) false)
                   wtr (io/writer (BlockCompressedOutputStream. tx-out-file))]
         (gavagai/with-translator (gavagai/register-converters
