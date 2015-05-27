@@ -9,6 +9,7 @@
             [bcbio.run.fsp :as fsp]
             [bcbio.run.itx :as itx]
             [bcbio.prioritize.provider.intogen :as intogen]
+            [bcbio.prioritize.provider.oncomine :as oncomine]
             [bcbio.prioritize.utils :as utils]
             [clojure.set :as cset]
             [clojure.java.io :as io]
@@ -30,11 +31,7 @@
 
 (defmethod hit->rec :oncomine
   [_ hit]
-  {:origin "oncomine"
-   :id (.getID hit)
-   :mutation-class (.getAttribute hit "om_MutClass" "")
-   :patient (.getAttribute hit "om_PATIENT")
-   :cancer (.getAttribute hit "om_Cancer")})
+  (oncomine/vc->rec hit))
 
 (defmethod hit->rec :default
   [f hit]
@@ -72,16 +69,27 @@
   (fn [known-file work-dir]
     (letfn [(is-intogen? [known-file]
               (.contains known-file "intogen_cancer_drivers"))
+            (is-oncomine? [known-file]
+              (.contains (string/lower-case known-file) "oncomine"))
             (is-vcf? [known-file]
               (or (.endsWith known-file ".vcf.gz") (.endsWith known-file ".vcf")))]
       (cond
+        (and (is-vcf? known-file) (is-oncomine? known-file)) :oncomine
         (is-vcf? known-file) :vcf
         (is-intogen? known-file) :intogen))))
 
 (defmethod get-known :vcf
-  ^{:doc "Retrieve from a set of input VCF files. Handling COSMIC and Oncomine outputs."}
+  ^{:doc "Retrieve from an input VCF files, handling COSMIC."}
   [known-file work-dir]
   (find-hits-one (utils/bgzip-index known-file work-dir)))
+
+(defmethod get-known :oncomine
+  ^{:doc "Retrieve from Oncomine VCF file"}
+  [known-file work-dir]
+  (-> known-file
+      (oncomine/clean-file work-dir)
+      (utils/bgzip-index work-dir)
+      find-hits-one))
 
 (defmethod get-known :intogen
   ^{:doc "Retrieve from a directory download from IntoGen."}
