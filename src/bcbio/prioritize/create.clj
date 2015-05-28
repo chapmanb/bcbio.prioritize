@@ -8,6 +8,7 @@
   (:require [bcbio.run.clhelp :as clhelp]
             [bcbio.run.fsp :as fsp]
             [bcbio.run.itx :as itx]
+            [bcbio.prioritize.provider.clinvar :as clinvar]
             [bcbio.prioritize.provider.intogen :as intogen]
             [bcbio.prioritize.provider.oncomine :as oncomine]
             [bcbio.prioritize.utils :as utils]
@@ -22,7 +23,8 @@
   (fn [f hit]
     (cond
       (.contains (string/lower-case f) "cosmic") :cosmic
-      (.contains (string/lower-case f) "oncomine") :oncomine)))
+      (.contains (string/lower-case f) "oncomine") :oncomine
+      (.contains (string/lower-case f) "clinvar") :clinvar)))
 
 (defmethod hit->rec :cosmic
   [_ hit]
@@ -32,6 +34,10 @@
 (defmethod hit->rec :oncomine
   [_ hit]
   (oncomine/vc->rec hit))
+
+(defmethod hit->rec :clinvar
+  [_ hit]
+  (clinvar/vc->rec hit))
 
 (defmethod hit->rec :default
   [f hit]
@@ -60,9 +66,9 @@
     (when-let [support (seq (mapcat #(% cur-bin) get-known-fns))]
       (assoc cur-bin :name
              (pr-str {:support (->> support
-                                    (map #(reduce-kv (fn [m k v] (assoc m k #{v})) {} %))
+                                    (map #(reduce-kv (fn [m k v] (assoc m k (if (set? v) v #{v}))) {} %))
                                     (apply merge-with cset/union))
-                      :name (:name cur-bin)})))))
+                      :name (set (string/split (:name cur-bin) #","))})))))
 
 (defmulti get-known
   "Create a function to return known supporting information based on inputs."
@@ -105,7 +111,9 @@
   [bin-file known-files out-file]
   (itx/with-named-tempdir [work-dir (str (fsp/file-root out-file) "-work")]
     (itx/with-tx-file [tx-out-file out-file]
-      (let [prep-bin (utils/bgzip-index bin-file work-dir)
+      (let [prep-bin (-> bin-file
+                         (utils/merge-bed work-dir)
+                         (utils/bgzip-index work-dir))
             get-known-fn (bin->known-bed (map #(get-known % work-dir) known-files))]
       (with-open [bin-reader (AbstractFeatureReader/getFeatureReader prep-bin (BEDCodec.) false)
                   wtr (io/writer (BlockCompressedOutputStream. tx-out-file))]

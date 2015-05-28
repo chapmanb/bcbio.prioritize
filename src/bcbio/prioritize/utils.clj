@@ -5,6 +5,8 @@
             [clojure.core.strint :refer [<<]]
             [me.raynes.fs :as fs]))
 
+;; bgzip and tabix support
+
 (defn- tabix-index
   "Tabix index input an input file inside a transactional directory."
   [bgzip-file ftype]
@@ -59,3 +61,14 @@
    (apply tabix-index (do-bgzip in-file out-dir)))
   ([in-file]
    (bgzip-index in-file (fs/parent in-file))))
+
+;; BED support
+
+(defn merge-bed
+  [in-file work-dir]
+  (let [out-file (str (fsp/file-root in-file work-dir) "-merged.bed.gz")
+        cat-cmd (if (.endsWith in-file "bed.gz") "zcat" "cat")]
+    (itx/run-cmd out-file
+                 "~{cat-cmd} ~{in-file} | bedtools merge -c 4 -o distinct -i - |"
+                 "bgzip -c > ~{out-file}")
+    (bgzip-index out-file work-dir)))
