@@ -8,6 +8,7 @@
   (:require [bcbio.run.clhelp :as clhelp]
             [bcbio.run.fsp :as fsp]
             [bcbio.run.itx :as itx]
+            [bcbio.prioritize.provider.civic :as civic]
             [bcbio.prioritize.provider.clinvar :as clinvar]
             [bcbio.prioritize.provider.intogen :as intogen]
             [bcbio.prioritize.provider.oncomine :as oncomine]
@@ -19,9 +20,10 @@
             [gavagai.core :as gavagai]))
 
 (defmulti hit->rec
-  "Convert a hit into an annotation specific record"
+  "Convert a VCF hit into an annotation specific record"
   (fn [f hit]
     (cond
+      (.contains (string/lower-case f) "clinvar") :clinvar
       (.contains (string/lower-case f) "cosmic") :cosmic
       (.contains (string/lower-case f) "oncomine") :oncomine
       (.contains (string/lower-case f) "clinvar") :clinvar)))
@@ -39,6 +41,10 @@
   [_ hit]
   (clinvar/vc->rec hit))
 
+(defmethod hit->rec :civic
+  [_ hit]
+  (civic/hit->rec hit))
+
 (defmethod hit->rec :default
   [f hit]
   (throw (Exception. (str "Need to implement method to convert input file to records: " f))))
@@ -52,7 +58,8 @@
                                           (BlockCompressedInputStream. (io/file known))))]
       (let [q (.query reader (:chr cur-bin) (:start cur-bin) (:end cur-bin))
             codec (doto (case (last (fsp/split-ext+ known))
-                          ".vcf.gz" (VCFCodec.))
+                          ".vcf.gz" (VCFCodec.)
+                          ".bed.gz" (BEDCodec.))
                     (.readActualHeader liter))]
         (->> (take-while (complement nil?) (repeatedly #(.next q)))
              (map #(.decode codec %))
@@ -77,11 +84,17 @@
               (.contains known-file "intogen_cancer_drivers"))
             (is-oncomine? [known-file]
               (.contains (string/lower-case known-file) "oncomine"))
+            (is-civic? [known-file]
+              (.contains (string/lower-case known-file) "civic"))
+            (is-bed? [known-file]
+              (or (.endsWith known-file ".bed.gz") (.endsWith known-file ".bed")))
             (is-vcf? [known-file]
               (or (.endsWith known-file ".vcf.gz") (.endsWith known-file ".vcf")))]
       (cond
         (and (is-vcf? known-file) (is-oncomine? known-file)) :oncomine
         (is-vcf? known-file) :vcf
+        (is-bed? known-file) :bed
+        (and (is-bed? known-file) (is-civic? known-file)) :bed
         (is-intogen? known-file) :intogen))))
 
 (defmethod get-known :vcf
@@ -101,6 +114,11 @@
   ^{:doc "Retrieve from a directory download from IntoGen."}
   [known-file _]
   (intogen/get-known known-file))
+
+(defmethod get-known :bed
+  ^{:doc "Parse and return a standard BED file, handling CIViC preparation."}
+  [known-file work-dir]
+  (find-hits-one (utils/bgzip-index known-file work-dir)))
 
 (defmethod get-known :default
   [known-file _]

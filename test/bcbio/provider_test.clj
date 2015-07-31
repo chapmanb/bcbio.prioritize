@@ -1,5 +1,5 @@
 (ns bcbio.provider-test
-  (:require ; [bcbio.prioritize.provider.civic :as civic]
+  (:require [bcbio.prioritize.provider.civic :as civic]
             [bcbio.prioritize.create :as create]
             [clojure.java.io :as io]
             [clojure.test :refer :all]
@@ -9,12 +9,12 @@
 (def data-files
   {:ref (str (io/file (:data dirs) "ref" "GRCh37-transcripts.bed"))})
 
-;; (deftest civic-test
-;;   (testing "Retrieval of genes from CIViC"
-;;     (clojure.pprint/pprint (civic/gene-info "672"))
-;;     (let [g (civic/gene "672")]
-;;       (is (= "BRCA1" (:entrez_name g)))
-;;       (is (= ["BRCA Germline Variants"] (vec (map :name (:variant_groups g))))))))
+(deftest civic-test
+  (testing "Retrieval of genes from CIViC"
+    (let [g (civic/gene "20")]
+      (clojure.pprint/pprint (civic/gene->bed g))
+      (is (= "ERBB2" (:name g)))
+      (is (= ["HER2 Activating"] (vec (map :name (:variant_groups g))))))))
 
 ;; (deftest intogen-test
 ;;   (testing "Preparation of bin files from IntoGen"
