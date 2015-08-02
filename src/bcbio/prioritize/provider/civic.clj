@@ -7,8 +7,8 @@
 
 (defn hit->rec
   "Parse out BED name field for passing into build of binned priority targets."
-  [rec]
-  (println rec))
+  [hit]
+  (println hit))
 
 ;; ## Preparing CIViC BED file
 
@@ -53,6 +53,18 @@
   []
   (url->json :civic "api/genes"))
 
+(defn variant-summary
+  "Organize variants into a summary for a CIViC gene."
+  [g]
+  {:origin "civic"
+   :variant-groups (map :name (:variant_groups g))
+   :url (format "https://civic.genome.wustl.edu//#/events/genes/%s/summary" (:id g))
+   :drugs (->> (map :id (:variants g))
+               (mapcat #(url->json :civic (format "/api/variants/%s/evidence_items" %)))
+               (mapcat :drugs)
+               (map :name)
+               set)})
+
 (defn- gene->build
   "Retrieve human genome build information from CIViC gene object.
    Defaults to GRCh37 if not found."
@@ -63,5 +75,7 @@
 (defn gene->bed
   "Convert gene into a BED-ready output with metadata encoded in the name field."
   [g]
-  (let [g-info (gene-info :human (gene->build g) (:name g))]
-    g-info))
+  (let [g-info (merge (gene-info :human (gene->build g) (:name g))
+                      (variant-summary g))]
+    (-> (select-keys g-info [:assembly_name :seq_region_name :start :end])
+        (assoc :name (select-keys g-info [:url :variant-groups :origin :drugs :display_name])))))
