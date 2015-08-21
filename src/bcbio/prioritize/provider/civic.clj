@@ -1,7 +1,17 @@
 (ns bcbio.prioritize.provider.civic
   "Interaction with the CIViC API for retrieving clinical mutations
    https://civic.genome.wustl.edu/#/api-documentation"
-  (:require [clj-http.client :as client]))
+  (:import [htsjdk.samtools.util BlockCompressedOutputStream])
+  (:require [bcbio.prioritize.utils :as utils]
+            [bcbio.run.clhelp :as clhelp]
+            [bcbio.run.itx :as itx]
+            [clj-http.client :as client]
+            [clj-time.core]
+            [clj-time.format]
+            [clojure.java.io :as io]
+            [clojure.string :as string]
+            [clojure.tools.cli :refer [parse-opts]]
+            [slingshot.slingshot :refer [try+]]))
 
 ;; ## Interaction with prioritzation
 
@@ -46,23 +56,33 @@
 (defn gene
   "Retrieve a single gene from CIViC"
   [civic-id]
-  (url->json :civic (format "api/genes/%s" civic-id)))
+  (try+
+   (url->json :civic (format "api/genes/%s" civic-id))
+   (catch [:status 404] {})))
 
 (defn genes
   "Retrieve all genes available in CIViC"
   []
   (url->json :civic "api/genes"))
 
+(defn genes-hack
+  "Retrieve genes via a hack on IDs, until /api/genes returns all items"
+  []
+  (->> (range 200)
+       (map gene)
+       (remove nil?)))
+
 (defn variant-summary
   "Organize variants into a summary for a CIViC gene."
   [g]
-  {:origin "civic"
+  {:origin #{"civic"}
    :variant-groups (map :name (:variant_groups g))
    :url (format "https://civic.genome.wustl.edu//#/events/genes/%s/summary" (:id g))
    :drugs (->> (map :id (:variants g))
                (mapcat #(url->json :civic (format "/api/variants/%s/evidence_items" %)))
                (mapcat :drugs)
                (map :name)
+               (remove (partial = "N/A"))
                set)})
 
 (defn- gene->build
@@ -78,4 +98,37 @@
   (let [g-info (merge (gene-info :human (gene->build g) (:name g))
                       (variant-summary g))]
     (-> (select-keys g-info [:assembly_name :seq_region_name :start :end])
-        (assoc :name (select-keys g-info [:url :variant-groups :origin :drugs :display_name])))))
+        (assoc :name {:support (select-keys g-info [:url :variant-groups :origin :drugs])
+                      :name #{(:display_name g-info)}}))))
+
+(defn curdb->bed
+  "Dump the current CIViC database to a BED file for prioritization."
+  []
+  (let [out-file (format "civic-%s.bed.gz" (clj-time.format/unparse (clj-time.format/formatters :year-month-day)
+                                                                    (clj-time.core/now)))]
+    (itx/with-tx-file [tx-out-file out-file]
+      (with-open [wtr (io/writer (BlockCompressedOutputStream. (io/file tx-out-file)))]
+        (doseq [g (sort-by (juxt :seq_region_name :start) (map gene->bed (genes-hack)))]
+          (.write wtr (str (string/join "\t" (map (update-in g [:name] pr-str)
+                                                  [:seq_region_name :start :end :name]))
+                           "\n")))))
+    (utils/bgzip-index out-file)))
+
+(defn- usage [options-summary]
+  (->> ["Create file of priority regions with genes from current CIViC database (https://civic.genome.wustl.edu)"
+        ""
+        "Usage: bcbio-prioritize create-civic"
+        ""
+        "Options:"
+        options-summary]
+       (string/join \newline)))
+
+(defn -main [& args]
+  (let [opt-spec [["-h" "--help"]]
+        {:keys [options summary errors]} (parse-opts args opt-spec)
+        missing (clhelp/check-missing options #{})]
+    (cond
+      (:help options) (clhelp/exit 0 (usage summary))
+      errors (clhelp/exit 1 (clhelp/error-msg errors))
+      (not (empty? missing)) (clhelp/exit 1 (str (clhelp/error-msg missing) \newline \newline (usage summary)))
+      :else (curdb->bed))))

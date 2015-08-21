@@ -37,6 +37,7 @@
                      read-driver-file
                      (map #(assoc % :Tumor_type (get tumor-types (:geneHGNCsymbol %) #{})))
                      (map (juxt :geneHGNCsymbol identity))
-                     (into {}))]
+                     (into {})
+                     (#(assoc % :origin #{"oncomine"})))]
     (fn [hit]
       (remove nil? (map #(get drivers %) (string/split (:name hit) #","))))))
