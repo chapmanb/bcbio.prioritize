@@ -12,7 +12,8 @@
    :cosmic (str (io/file (:data dirs) "annotation" "cosmic-v68-GRCh37.vcf.gz"))
    :oncomine (str (io/file (:data dirs) "annotation" "oncomine-GRCh37.vcf.gz"))
    :clinvar (str (io/file (:data dirs) "annotation" "clinvar-GRCh37.vcf.gz"))
-   :call (str (io/file (:data dirs) "calls" "ex1.bed.gz"))})
+   :call (str (io/file (:data dirs) "calls" "ex1.bed.gz"))
+   :call-vcf (str (io/file (:data dirs) "calls" "ex2.vcf.gz"))})
 
 (deftest known-test
   (fsp/remove-path (:work dirs))
@@ -26,6 +27,10 @@
       (let [priority-file (str (fs/file (:work dirs) "ex1-priority.bed.gz"))]
         (is (= priority-file
                (known/prioritize (:call data-files) bin-file priority-file)))))
+    (testing "Prioritization of VCF file calls given binned inputs"
+      (let [priority-file (str (fs/file (:work dirs) "ex2-priority.vcf.gz"))]
+        (is (= priority-file
+               (known/prioritize (:call-vcf data-files) bin-file priority-file)))))
     (testing "Oncomine: creation of binned items for prioritization."
       (is (= onc-file
              (create/from-known (:ref data-files) #{(:oncomine data-files)} onc-file))))

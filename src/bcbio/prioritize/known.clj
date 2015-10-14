@@ -4,6 +4,8 @@
             [bcbio.run.clhelp :as clhelp]
             [bcbio.run.fsp :as fsp]
             [bcbio.run.itx :as itx]
+            [bcbio.variation.variantcontext :as vc]
+            [clojure.algo.generic.functor :refer [fmap]]
             [clojure.data.csv :as csv]
             [clojure.edn :as edn]
             [clojure.java.io :as io]
@@ -14,9 +16,10 @@
 (defn- intersect
   "Intersect two BED files returning a tsv of overlaps."
   [a-file b-file base-name out-dir]
-  (let [out-file (str (io/file out-dir (str base-name "-intersect.tsv")))]
+  (let [out-file (str (io/file out-dir (str base-name "-intersect.tsv")))
+        cat-cmd (if (.endsWith a-file ".gz") "zcat" "cat")]
     (itx/run-cmd out-file
-                 "bedtools intersect -a ~{a-file} -b ~{b-file} -wa -wb "
+                 "~{cat-cmd} ~{a-file} | bedtools intersect -a - -b ~{b-file} -wa -wb "
                  "> ~{out-file}")))
 
 (defn- combine-hits
@@ -36,10 +39,17 @@
 (defn- summarize-matches [[coords hits]]
   (conj (vec coords) (combine-hits hits)))
 
-(defn- summarize
-  "Summarize an intersected bedtools TSV file into a prioritized bed"
-  [in-file out-file-orig]
-  (let [out-file (string/replace out-file-orig ".bed.gz" ".bed")]
+(defmulti summarize
+  "Handle summarization of multiple output formats"
+  (fn [in-file _ out-file]
+    (case (last (fsp/split-ext+ out-file))
+      (".bed.gz" ".bed") :bed
+      (".vcf.gz" ".vcf") :vcf)))
+
+(defmethod summarize :bed
+  ^{:doc "Summarize an intersected bedtools TSV file into a prioritized bed."}
+  [in-file _ out-file-orig]
+  (let [out-file (string/replace out-file-orig ".gz" "")]
     (itx/with-tx-file [tx-out-file out-file]
       (with-open [rdr (io/reader in-file)
                   wtr (io/writer out-file)]
@@ -51,13 +61,40 @@
           (csv/write-csv wtr $ :separator \tab))))
     out-file))
 
+(defn- parse-intersects
+  "Retrieve a lookup map of VCF coordinates to prioritization hits"
+  [in-file]
+  (with-open [rdr (io/reader in-file)]
+    (as-> rdr $
+      (csv/read-csv $ :separator \tab)
+      (group-by (partial take 4) $)
+      (fmap combine-hits $))))
+
+(defn- vc-add-hit
+  "Add hit information to a variant context if it passes."
+  [hits vc]
+  (when-let [hit (get hits [(:chr vc) (str (:start vc)) (:id vc) (.getBaseString (:ref-allele vc))])]
+    (:vc vc)))
+
+(defmethod summarize :vcf
+  ^{:doc "Summarize intersected bedtools TSV into an output VCF."}
+  [in-file orig-file out-file]
+  (let [hits (parse-intersects in-file)]
+    (with-open [rdr (io/reader in-file)
+                vcf-iter (vc/get-vcf-iterator orig-file)]
+      (vc/write-vcf-w-template orig-file {:out out-file}
+                               (->> (vc/parse-vcf vcf-iter)
+                                    (map (partial vc-add-hit hits))
+                                    (remove nil?)))))
+  out-file)
+
 (defn prioritize
   [input-file known-file out-file]
   (itx/with-named-tempdir [work-dir (str (fsp/file-root out-file) "-work")]
     (-> input-file
         (utils/bgzip-index work-dir)
         (intersect known-file "i2k" work-dir)
-        (summarize out-file)
+        (summarize input-file out-file)
         utils/bgzip-index))
   (when (.endsWith out-file ".bed.gz")
     (fsp/remove-path (string/replace out-file ".bed.gz" ".bed")))
@@ -78,8 +115,8 @@
 
 (defn -main [& args]
   (let [opt-spec [["-o" "--output OUTPUT" "Output file to write priority regions with annotations (bed.gz)"]
-                  ["-i" "--input INPUT" "Input file of calls for prioritization (bed.gz "]
-                  ["-k" "--known KNOWN" "Organized set of known regions from 'create' (bed.gz)"]
+                  ["-i" "--input INPUT" "Input file of calls for prioritization (bed.gz or vcf.gz)"]
+                  ["-k" "--known KNOWN" "Organized set of known regions from 'create' (bed.gz or vcf.gz)"]
                   ["-h" "--help"]]
         {:keys [options arguments errors summary]} (parse-opts args opt-spec)
         missing (clhelp/check-missing options #{:output :input :known})]
