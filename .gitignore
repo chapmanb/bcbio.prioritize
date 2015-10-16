@@ -10,3 +10,4 @@ pom.xml.asc
 .hgignore
 .hg/
 test/work
+bin/bcbio-prioritize

@@ -1,4 +1,4 @@
-(defproject bcbio.prioritize "0.0.1-SNAPSHOT"
+(defproject bcbio.prioritize "0.0.1"
   :description "Prioritize small variants, structural variants and coverage based on biological inputs"
   :url "https://github.com/chapmanb/bcbio.prioritize"
   :license {:name "MIT" :url "http://www.opensource.org/licenses/mit-license.html"}
@@ -13,7 +13,7 @@
                  [slingshot "0.12.2"]
                  [com.taoensso/timbre "3.4.0"]
                  [gavagai "0.3.2"]
-                 [bcbio.variation.recall "0.1.3"]
+                 [bcbio.variation.recall "0.1.4"]
                  [com.github.samtools/htsjdk "1.140"]
                  [bcbio.run "0.0.5"]]
   :profiles {:uberjar {:aot [bcbio.prioritize.main]}}

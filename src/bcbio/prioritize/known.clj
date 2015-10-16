@@ -1,5 +1,6 @@
 (ns bcbio.prioritize.known
   "Prioritize a set of calls with a set of known regions of interest"
+  (:import  [htsjdk.variant.vcf VCFInfoHeaderLine VCFHeaderLineType VCFHeaderLineCount])
   (:require [bcbio.prioritize.utils :as utils]
             [bcbio.run.clhelp :as clhelp]
             [bcbio.run.fsp :as fsp]
@@ -26,8 +27,9 @@
   "Combine a set of binned hits into a short descriptive string about a call"
   [hits-plus-coords]
   (letfn [(merge-hit [coll hit]
-            {:name (conj (get coll :name #{}) (:name hit))
-             :origin (cset/union (get coll :support #{}) (set (map :origin (:support hit))))})
+            {:name (cset/union (get coll :name #{}) (:name hit))
+             :origin (cset/union (get coll :support #{}) (set (or (get-in hit [:support :origin])
+                                                                  (map :origin (:support hit)))))})
           (merge->str [coll]
             (format "%s:%s" (string/join "," (sort (:origin coll)))
                     (string/join "," (sort (:name coll)))))]
@@ -74,7 +76,7 @@
   "Add hit information to a variant context if it passes."
   [hits vc]
   (when-let [hit (get hits [(:chr vc) (str (:start vc)) (:id vc) (.getBaseString (:ref-allele vc))])]
-    (:vc vc)))
+    (vc/vc-add-attr (:vc vc) "KNOWN" hit)))
 
 (defmethod summarize :vcf
   ^{:doc "Summarize intersected bedtools TSV into an output VCF."}
@@ -85,7 +87,10 @@
       (vc/write-vcf-w-template orig-file {:out out-file}
                                (->> (vc/parse-vcf vcf-iter)
                                     (map (partial vc-add-hit hits))
-                                    (remove nil?)))))
+                                    (remove nil?))
+                               :new-md #{(VCFInfoHeaderLine. "KNOWN" 1
+                                                             VCFHeaderLineType/String
+                                                             "Known gene associations from existing databases")})))
   out-file)
 
 (defn prioritize
