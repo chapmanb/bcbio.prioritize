@@ -26,15 +26,29 @@
 (defn- combine-hits
   "Combine a set of binned hits into a short descriptive string about a call"
   [hits-plus-coords]
-  (letfn [(merge-hit [coll hit]
+  (letfn [(parse-hit [hit-txt]
+            ;; Parse hit, handling EDN and plain text cases
+            (if (.startsWith hit-txt "{")
+              (edn/read-string hit-txt)
+              hit-txt))
+          (prep-hit [hit]
+            ;; Handle raw inputs where we convert a string into the name
+            (if (every? nil? (map #(get hit %) [:origin :name]))
+              {:name (set (string/split hit #","))}
+              hit))
+          (merge-hit [coll hit]
             {:name (cset/union (get coll :name #{}) (:name hit))
              :origin (cset/union (get coll :support #{}) (set (or (get-in hit [:support :origin])
                                                                   (map :origin (:support hit)))))})
           (merge->str [coll]
-            (format "%s:%s" (string/join "," (sort (:origin coll)))
-                    (string/join "," (sort (:name coll)))))]
+            (let [origin (string/join "," (sort (:origin coll)))
+                  names (string/join "," (sort (:name coll)))]
+              (->> [origin names]
+                   (remove empty?)
+                   (string/join ":"))))]
     (->> hits-plus-coords
-         (map #(edn/read-string (last %)))
+         (map #(parse-hit (last %)))
+         (map prep-hit)
          (reduce merge-hit {})
          merge->str)))
 
@@ -88,7 +102,7 @@
                                (->> (vc/parse-vcf vcf-iter)
                                     (map (partial vc-add-hit hits))
                                     (remove nil?))
-                               :new-md #{(VCFInfoHeaderLine. "KNOWN" 1
+                               :new-md #{(VCFInfoHeaderLine. "KNOWN" VCFHeaderLineCount/UNBOUNDED
                                                              VCFHeaderLineType/String
                                                              "Known gene associations from existing databases")})))
   out-file)

@@ -1,8 +1,8 @@
-(defproject bcbio.prioritize "0.0.1"
+(defproject bcbio.prioritize "0.0.2"
   :description "Prioritize small variants, structural variants and coverage based on biological inputs"
   :url "https://github.com/chapmanb/bcbio.prioritize"
   :license {:name "MIT" :url "http://www.opensource.org/licenses/mit-license.html"}
-  :dependencies [[org.clojure/clojure "1.6.0"]
+  :dependencies [[org.clojure/clojure "1.7.0"]
                  [org.clojure/algo.generic "0.1.2"]
                  [org.clojure/data.csv "0.1.2"]
                  [semantic-csv "0.1.0"]

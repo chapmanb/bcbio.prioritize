@@ -12,6 +12,7 @@
    :cosmic (str (io/file (:data dirs) "annotation" "cosmic-v68-GRCh37.vcf.gz"))
    :oncomine (str (io/file (:data dirs) "annotation" "oncomine-GRCh37.vcf.gz"))
    :clinvar (str (io/file (:data dirs) "annotation" "clinvar-GRCh37.vcf.gz"))
+   :simple-known (str (io/file (:data dirs) "annotation" "binned-simple.bed"))
    :call (str (io/file (:data dirs) "calls" "ex1.bed.gz"))
    :call-vcf (str (io/file (:data dirs) "calls" "ex2.vcf.gz"))})
 
@@ -28,7 +29,11 @@
         (is (= priority-file
                (known/prioritize (:call data-files) bin-file priority-file)))))
     (testing "Prioritization of VCF file calls given binned inputs"
-      (let [priority-file (str (fs/file (:work dirs) "ex2-priority.vcf.gz"))]
+      (let [priority-file (str (fs/file (:work dirs) "ex2-priority-prebinned.vcf.gz"))]
+        (is (= priority-file
+               (known/prioritize (:call-vcf data-files) (:simple-known data-files) priority-file)))))
+    (testing "Prioritize VCF file given a prepped known input file"
+      (let [priority-file (str (fs/file (:work dirs) "ex2-priority-known.vcf.gz"))]
         (is (= priority-file
                (known/prioritize (:call-vcf data-files) bin-file priority-file)))))
     (testing "Oncomine: creation of binned items for prioritization."
