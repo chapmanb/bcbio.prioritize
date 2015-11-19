@@ -14,6 +14,9 @@
             [clojure.string :as string]
             [clojure.tools.cli :refer [parse-opts]]))
 
+(def ^{:doc "We avoid flattening all intermediate genes and look at ends only for larger events."}
+  LARGE_EVENT_SIZE 50000)
+
 (defn- intersect
   "Intersect two BED files returning a tsv of overlaps."
   [a-file b-file base-name out-dir]
@@ -22,6 +25,49 @@
     (itx/run-cmd out-file
                  "~{cat-cmd} ~{a-file} | bedtools intersect -a - -b ~{b-file} -wa -wb "
                  "> ~{out-file}")))
+
+(defmulti get-start-end
+  "Parse start/end coordinates from flat bedtools outputs"
+  (fn [hit]
+    (cond
+      (> (count hit) 12) :vcf
+      :else :bed)))
+
+(defmethod get-start-end :bed
+  [hit]
+  (let [[contig start end] (take 3 hit)]
+    [contig (Integer/parseInt start) contig (Integer/parseInt end)]))
+
+(defmethod get-start-end :vcf
+  [hit]
+  (let [contig (str (first hit))
+        start (Integer/parseInt (second hit))
+        info (nth hit 7)
+        end-info-tag (first (filter #(.startsWith % "END=") (string/split info #";")))
+        end (when end-info-tag (Integer/parseInt (last (string/split end-info-tag #"="))))]
+    (when-not (nil? end)
+      [contig start contig end])))
+
+(defn- hit-near-end?
+  [[contig1 pos1 contig2 pos2] hit]
+  (let [buffer 5000
+        [hit-contig hit-start-str hit-end-str] (->> hit (take-last 4) drop-last)
+        hit-start (Integer/parseInt hit-start-str)
+        hit-end (Integer/parseInt hit-end-str)]
+    (letfn [(in-end? [contig pos]
+              (and (= hit-contig contig)
+                   (>= pos (- hit-start buffer))
+                   (<= pos (+ hit-end buffer))))]
+      (or (in-end? contig1 pos1) (in-end? contig2 pos2)))))
+
+(defn- limit-hits
+  "For long SV events, limit hits to those that overlap endpoints."
+  [hits]
+  (let [[contig1 start contig2 end] (get-start-end (first hits))]
+    (if (or (nil? contig1)
+            (and (= contig1 contig2) (< (- end start) LARGE_EVENT_SIZE)))
+      hits
+      (filter (partial hit-near-end? [contig1 start contig2 end]) hits))))
 
 (defn- combine-hits
   "Combine a set of binned hits into a short descriptive string about a call"
@@ -47,6 +93,7 @@
                    (remove empty?)
                    (string/join ":"))))]
     (->> hits-plus-coords
+         limit-hits
          (map #(parse-hit (last %)))
          (map prep-hit)
          (reduce merge-hit {})
