@@ -94,21 +94,33 @@
 
 (defn gene->bed
   "Convert gene into a BED-ready output with metadata encoded in the name field."
-  [g]
-  (let [g-info (merge (gene-info :human (gene->build g) (:name g))
+  [options g]
+  (let [g-info (merge (gene-info :human (:build options) (:name g))
                       (variant-summary g))]
     (-> (select-keys g-info [:assembly_name :seq_region_name :start :end])
         (assoc :name {:support (select-keys g-info [:url :variant-groups :origin :drugs])
                       :name #{(:display_name g-info)}}))))
 
+(defn- gene-w-no-info?
+  "Check if an input gene has no information"
+  [g]
+  (and (empty? (:variants g))
+       (empty? (:variant_groups g))
+       (empty? (:sources g))
+       (nil? (:clinical_description g))))
+
 (defn curdb->bed
   "Dump the current CIViC database to a BED file for prioritization."
-  []
-  (let [out-file (format "civic-%s.bed.gz" (clj-time.format/unparse (clj-time.format/formatters :year-month-day)
-                                                                    (clj-time.core/now)))]
+  [options]
+  (let [out-file (format "civic-%s-%s.bed.gz" (:build options)
+                         (clj-time.format/unparse (clj-time.format/formatters :year-month-day)
+                                                  (clj-time.core/now)))]
     (itx/with-tx-file [tx-out-file out-file]
       (with-open [wtr (io/writer (BlockCompressedOutputStream. (io/file tx-out-file)))]
-        (doseq [g (sort-by (juxt :seq_region_name :start) (map gene->bed (genes-hack)))]
+        (doseq [g (->> (genes-hack)
+                       (remove gene-w-no-info?)
+                       (map (partial gene->bed options))
+                       (sort-by (juxt :seq_region_name :start)))]
           (.write wtr (str (string/join "\t" (map (update-in g [:name] pr-str)
                                                   [:seq_region_name :start :end :name]))
                            "\n")))))
@@ -124,11 +136,12 @@
        (string/join \newline)))
 
 (defn -main [& args]
-  (let [opt-spec [["-h" "--help"]]
+  (let [opt-spec [["-h" "--help"]
+                  ["-b" "--build BUILD" "Genome build to use (defaults to GRCh37)" :default "GRCh37"]]
         {:keys [options summary errors]} (parse-opts args opt-spec)
         missing (clhelp/check-missing options #{})]
     (cond
       (:help options) (clhelp/exit 0 (usage summary))
       errors (clhelp/exit 1 (clhelp/error-msg errors))
       (not (empty? missing)) (clhelp/exit 1 (str (clhelp/error-msg missing) \newline \newline (usage summary)))
-      :else (curdb->bed))))
+      :else (curdb->bed options))))
