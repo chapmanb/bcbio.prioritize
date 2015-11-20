@@ -1,3 +1,7 @@
+## 0.0.4 (20 November 2015)
+
+- Skip reporting of large structural variants with no evidence in breakends.
+
 ## 0.0.3 (19 November 2015)
 
 - For large structural variant events (> 50kb) only report genes intersecting

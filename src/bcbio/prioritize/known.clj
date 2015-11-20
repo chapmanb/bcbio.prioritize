@@ -137,7 +137,8 @@
   "Add hit information to a variant context if it passes."
   [hits vc]
   (when-let [hit (get hits [(:chr vc) (str (:start vc)) (:id vc) (.getBaseString (:ref-allele vc))])]
-    (vc/vc-add-attr (:vc vc) "KNOWN" hit)))
+    (when-not (empty? hit)
+      (vc/vc-add-attr (:vc vc) "KNOWN" hit))))
 
 (defmethod summarize :vcf
   ^{:doc "Summarize intersected bedtools TSV into an output VCF."}
