@@ -1,3 +1,9 @@
+## 0.0.5 (22 November 2015)
+
+- Carry along both ends of breakends when one falls in a prioritized region.
+  Enables resolution of large or inter-chromosomal events originating in a
+  region of interest.
+
 ## 0.0.4 (20 November 2015)
 
 - Skip reporting of large structural variants with no evidence in breakends.

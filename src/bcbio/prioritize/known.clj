@@ -133,22 +133,38 @@
       (group-by (partial take 4) $)
       (fmap combine-hits $))))
 
+(defn- get-bnds
+  "Add breakends with known hits, ensuring both ends get passed through"
+  [in-file hits]
+  (with-open [vcf-iter (vc/get-vcf-iterator in-file)]
+    (reduce (fn [coll gvc]
+              (let [hit (get hits [(:chr gvc) (str (:start gvc)) (:id gvc) (.getBaseString (:ref-allele gvc))])
+                    mate-id (-> gvc :attributes (get "MATEID"))]
+                (if (and (not (empty? hit)) mate-id)
+                  (assoc coll mate-id (str "BND-with-" hit))
+                  coll)))
+            {} (vc/parse-vcf vcf-iter))))
+
 (defn- vc-add-hit
   "Add hit information to a variant context if it passes."
-  [hits vc]
-  (when-let [hit (get hits [(:chr vc) (str (:start vc)) (:id vc) (.getBaseString (:ref-allele vc))])]
-    (when-not (empty? hit)
-      (vc/vc-add-attr (:vc vc) "KNOWN" hit))))
+  [hits bnds vc]
+  (let [hit (get hits [(:chr vc) (str (:start vc)) (:id vc) (.getBaseString (:ref-allele vc))])
+        bnd (get bnds (:id vc))]
+    (cond
+      (not (empty? hit)) (vc/vc-add-attr (:vc vc) "KNOWN" hit)
+      bnd (vc/vc-add-attr (:vc vc) "KNOWN" bnd)
+      :else nil)))
 
 (defmethod summarize :vcf
   ^{:doc "Summarize intersected bedtools TSV into an output VCF."}
   [in-file orig-file out-file]
-  (let [hits (parse-intersects in-file)]
+  (let [hits (parse-intersects in-file)
+        bnds (get-bnds orig-file hits)]
     (with-open [rdr (io/reader in-file)
                 vcf-iter (vc/get-vcf-iterator orig-file)]
       (vc/write-vcf-w-template orig-file {:out out-file}
                                (->> (vc/parse-vcf vcf-iter)
-                                    (map (partial vc-add-hit hits))
+                                    (map (partial vc-add-hit hits bnds))
                                     (remove nil?))
                                :new-md #{(VCFInfoHeaderLine. "KNOWN" VCFHeaderLineCount/UNBOUNDED
                                                              VCFHeaderLineType/String
