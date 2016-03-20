@@ -1,3 +1,11 @@
+## 0.0.6 (20 March 2016)
+
+- Avoid memory problems with large inputs by avoiding loading
+  intersection file into memory.
+- Improve speed on large VCF inputs by pre-selecting with bcftools and
+  structural variant length.
+- Raise Java exceptions like OutOfMemoryError to avoid silent failures.
+
 ## 0.0.5 (22 November 2015)
 
 - Carry along both ends of breakends when one falls in a prioritized region.

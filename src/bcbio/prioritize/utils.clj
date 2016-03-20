@@ -31,7 +31,7 @@
   (fn [in-file out-dir]
     (last (fsp/split-ext+ in-file))))
 
-(defmethod do-bgzip".bed"
+(defmethod do-bgzip ".bed"
   [in-file out-dir]
   (let [out-file (str (fsp/file-root in-file out-dir) ".bed.gz")]
     [(bgzip-file in-file out-file) "bed"]))

@@ -6,7 +6,6 @@
             [bcbio.run.fsp :as fsp]
             [bcbio.run.itx :as itx]
             [bcbio.variation.variantcontext :as vc]
-            [clojure.algo.generic.functor :refer [fmap]]
             [clojure.data.csv :as csv]
             [clojure.edn :as edn]
             [clojure.java.io :as io]
@@ -17,11 +16,23 @@
 (def ^{:doc "We avoid flattening all intermediate genes and look at ends only for larger events."}
   LARGE_EVENT_SIZE 50000)
 
+(defn- has-svlen?
+  "Check if a VCF file has SVLEN in the header"
+  [in-file]
+  (.getInfoHeaderLine (vc/get-vcf-header in-file) "SVLEN"))
+
 (defn- intersect
   "Intersect two BED files returning a tsv of overlaps."
   [a-file b-file base-name out-dir]
   (let [out-file (str (io/file out-dir (str base-name "-intersect.tsv")))
-        cat-cmd (if (.endsWith a-file ".gz") "zcat" "cat")]
+        cat-cmd (cond
+                  (and (.endsWith a-file ".vcf.gz")
+                       (.endsWith b-file ".bed.gz")) (if (has-svlen? a-file)
+                                                       (format "bcftools filter -R %s -e 'ABS(SVLEN) > %s'"
+                                                               b-file LARGE_EVENT_SIZE)
+                                                       (format "bcftools view -R %s " b-file))
+                  (.endsWith a-file ".gz") "zcat"
+                  :else "cat")]
     (itx/run-cmd out-file
                  "~{cat-cmd} ~{a-file} | bedtools intersect -a - -b ~{b-file} -wa -wb "
                  "> ~{out-file}")))
@@ -71,7 +82,7 @@
 
 (defn- combine-hits
   "Combine a set of binned hits into a short descriptive string about a call"
-  [hits-plus-coords]
+  [hits]
   (letfn [(parse-hit [hit-txt]
             ;; Parse hit, handling EDN and plain text cases
             (if (.startsWith hit-txt "{")
@@ -92,12 +103,14 @@
               (->> [origin names]
                    (remove empty?)
                    (string/join ":"))))]
-    (->> hits-plus-coords
-         limit-hits
-         (map #(parse-hit (last %)))
-         (map prep-hit)
-         (reduce merge-hit {})
-         merge->str)))
+    (let [coords (take 4 (first hits))
+          descr (->> hits
+                     limit-hits
+                     (map #(parse-hit (last %)))
+                     (map prep-hit)
+                     (reduce merge-hit {})
+                     merge->str)]
+      [coords descr])))
 
 (defn- summarize-matches [[coords hits]]
   (conj (vec coords) (combine-hits hits)))
@@ -130,8 +143,9 @@
   (with-open [rdr (io/reader in-file)]
     (as-> rdr $
       (csv/read-csv $ :separator \tab)
-      (group-by (partial take 4) $)
-      (fmap combine-hits $))))
+      (partition-by (partial take 4) $)
+      (map combine-hits $)
+      (into {} $))))
 
 (defn- get-bnds
   "Add breakends with known hits, ensuring both ends get passed through"
@@ -160,8 +174,7 @@
   [in-file orig-file out-file]
   (let [hits (parse-intersects in-file)
         bnds (get-bnds orig-file hits)]
-    (with-open [rdr (io/reader in-file)
-                vcf-iter (vc/get-vcf-iterator orig-file)]
+    (with-open [vcf-iter (vc/get-vcf-iterator orig-file)]
       (vc/write-vcf-w-template orig-file {:out out-file}
                                (->> (vc/parse-vcf vcf-iter)
                                     (map (partial vc-add-hit hits bnds))
@@ -188,9 +201,9 @@
         ""
         "Usage: bcbio-prioritize known [options] -i input -k known -o output"
         ""
-        "  input:  File of calls to prioritize (bed or bed.gz)"
+        "  input:  File of calls to prioritize (vcf, vcf.gz, bed or bed.gz)"
         "  known:  Prepared file of known regions to prioritize on"
-        "  output: Output with prioritized calls(a bed.gz file)"
+        "  output: Output with prioritized calls (a vcf.gz or bed.gz file)"
         ""
         "Options:"
         options-summary]
