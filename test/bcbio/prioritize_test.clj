@@ -13,6 +13,7 @@
    :oncomine (str (io/file (:data dirs) "annotation" "oncomine-GRCh37.vcf.gz"))
    :clinvar (str (io/file (:data dirs) "annotation" "clinvar-GRCh37.vcf.gz"))
    :simple-known (str (io/file (:data dirs) "annotation" "binned-simple.bed"))
+   :simple-known-bed6 (str (io/file (:data dirs) "annotation" "binned-simple2.bed"))
    :call (str (io/file (:data dirs) "calls" "ex1.bed.gz"))
    :call-vcf (str (io/file (:data dirs) "calls" "ex2.vcf.gz"))})
 
@@ -32,6 +33,10 @@
       (let [priority-file (str (fs/file (:work dirs) "ex2-priority-prebinned.vcf.gz"))]
         (is (= priority-file
                (known/prioritize (:call-vcf data-files) (:simple-known data-files) priority-file)))))
+    (testing "Prioritize VCF file given a BED6 file"
+      (let [priority-file (str (fs/file (:work dirs) "ex2-priority-prebinned-bed6.vcf.gz"))]
+        (is (= priority-file
+               (known/prioritize (:call-vcf data-files) (:simple-known-bed6 data-files) priority-file)))))
     (testing "Prioritize VCF file given a prepped known input file"
       (let [priority-file (str (fs/file (:work dirs) "ex2-priority-known.vcf.gz"))]
         (is (= priority-file

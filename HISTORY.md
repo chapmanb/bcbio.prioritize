@@ -1,3 +1,10 @@
+## 0.0.7 (8 April 2016)
+
+- Handle longer BED inputs like BED 6 by truncating to BED 4. Thanks to
+  Sven-Eric Schelhorn.
+- Do not be as restrictive in filtering larger events on first pass speed up
+  since we subset those later and will miss larger ones in ends.
+
 ## 0.0.6 (20 March 2016)
 
 - Avoid memory problems with large inputs by avoiding loading

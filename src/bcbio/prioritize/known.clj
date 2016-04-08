@@ -21,16 +21,28 @@
   [in-file]
   (.getInfoHeaderLine (vc/get-vcf-header in-file) "SVLEN"))
 
+(defn- subset-bed
+  "Create BED4 files from longer inputs."
+  [in-file out-dir]
+  (let [out-file (format "%s-bed4.bed" (fsp/file-root in-file out-dir))
+        cat-cmd (cond
+                  (.endsWith in-file ".bed.gz") "zcat"
+                  (.endsWith in-file ".bed") "cat")]
+    (itx/run-cmd out-file
+                 "~{cat-cmd} ~{in-file} | cut -f 1-4 > ~{out-file}")))
+
 (defn- intersect
   "Intersect two BED files returning a tsv of overlaps."
-  [a-file b-file base-name out-dir]
+  [a-file b-file-orig base-name out-dir]
   (let [out-file (str (io/file out-dir (str base-name "-intersect.tsv")))
+        b-file (subset-bed b-file-orig out-dir)
         cat-cmd (cond
                   (and (.endsWith a-file ".vcf.gz")
-                       (.endsWith b-file ".bed.gz")) (if (has-svlen? a-file)
-                                                       (format "bcftools filter -R %s -e 'ABS(SVLEN) > %s'"
-                                                               b-file LARGE_EVENT_SIZE)
-                                                       (format "bcftools view -R %s " b-file))
+                       (or (.endsWith b-file ".bed.gz") (.endsWith b-file ".bed")))
+                  (if (has-svlen? a-file)
+                    (format "bcftools filter -R %s -e 'ABS(SVLEN) > %s'"
+                            b-file (* 10 LARGE_EVENT_SIZE))
+                    (format "bcftools view -R %s " b-file))
                   (.endsWith a-file ".gz") "zcat"
                   :else "cat")]
     (itx/run-cmd out-file
