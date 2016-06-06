@@ -1,4 +1,4 @@
-(defproject bcbio.prioritize "0.0.7"
+(defproject bcbio.prioritize "0.0.8"
   :description "Prioritize small variants, structural variants and coverage based on biological inputs"
   :url "https://github.com/chapmanb/bcbio.prioritize"
   :license {:name "MIT" :url "http://www.opensource.org/licenses/mit-license.html"}

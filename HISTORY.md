@@ -1,3 +1,8 @@
+## 0.0.8 (6 June 2016)
+
+- Clean up BED file prioritization output to be only a list of identified genes.
+- Correctly prioritize genes lacking ID fields (nil versus "." issues).
+
 ## 0.0.7 (8 April 2016)
 
 - Handle longer BED inputs like BED 6 by truncating to BED 4. Thanks to

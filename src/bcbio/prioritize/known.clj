@@ -125,7 +125,8 @@
       [coords descr])))
 
 (defn- summarize-matches [[coords hits]]
-  (conj (vec coords) (combine-hits hits)))
+  (let [[_ descr] (combine-hits hits)]
+    (conj (vec coords) descr)))
 
 (defmulti summarize
   "Handle summarization of multiple output formats"
@@ -174,7 +175,7 @@
 (defn- vc-add-hit
   "Add hit information to a variant context if it passes."
   [hits bnds vc]
-  (let [hit (get hits [(:chr vc) (str (:start vc)) (:id vc) (.getBaseString (:ref-allele vc))])
+  (let [hit (get hits [(:chr vc) (str (:start vc)) (or (:id vc) ".") (.getBaseString (:ref-allele vc))])
         bnd (get bnds (:id vc))]
     (cond
       (not (empty? hit)) (vc/vc-add-attr (:vc vc) "KNOWN" hit)
