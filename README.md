@@ -30,6 +30,16 @@ Identify regions missing sufficient sequencing coverage:
 
     bcbio-prioritize missing known.db coverage.db > known-missing.bed
 
+## Preparing files
+
+### CIViC
+
+To update the prioritization file from the [CIViC](https://civicdb.org) database
+of variant interpretations:
+
+    lein run create-civic --build GRCh37
+    lein run create-civic --build hg38
+
 ## License
 
 The code is freely available under the [MIT license][l1].

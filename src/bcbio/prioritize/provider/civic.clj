@@ -1,6 +1,6 @@
 (ns bcbio.prioritize.provider.civic
   "Interaction with the CIViC API for retrieving clinical mutations
-   https://civic.genome.wustl.edu/#/api-documentation"
+   https://griffithlab.github.io/civic-api-docs/"
   (:import [htsjdk.samtools.util BlockCompressedOutputStream])
   (:require [bcbio.prioritize.utils :as utils]
             [bcbio.run.clhelp :as clhelp]
@@ -36,7 +36,7 @@
 
 (defmethod url->json :civic
   [_ url]
-  (url->json* "https://civic.genome.wustl.edu" url))
+  (url->json* "https://civicdb.org" url))
 
 (defmethod url->json :ensembl-GRCh37
   [_ url]
@@ -51,7 +51,9 @@
   [species build gene-name]
   (let [loc (if (= build :GRCh37) :ensembl-GRCh37 :ensembl)
         species-url (get {:human "homo_sapiens"} species species)]
-    (url->json loc (format "lookup/symbol/%s/%s?content-type=application/json" species-url gene-name))))
+    (try+
+     (url->json loc (format "lookup/symbol/%s/%s?content-type=application/json" species-url gene-name))
+     (catch [:status 400] {}))))
 
 (defn gene
   "Retrieve a single gene from CIViC"
@@ -63,7 +65,7 @@
 (defn genes
   "Retrieve all genes available in CIViC"
   []
-  (url->json :civic "api/genes"))
+  (:records (url->json :civic "api/genes?count=500")))
 
 (defn genes-hack
   "Retrieve genes via a hack on IDs, until /api/genes returns all items"
@@ -75,15 +77,19 @@
 (defn variant-summary
   "Organize variants into a summary for a CIViC gene."
   [g]
-  {:origin #{"civic"}
-   :variant-groups (map :name (:variant_groups g))
-   :url (format "https://civic.genome.wustl.edu//#/events/genes/%s/summary" (:id g))
-   :drugs (->> (map :id (:variants g))
-               (mapcat #(url->json :civic (format "/api/variants/%s/evidence_items" %)))
-               (mapcat :drugs)
-               (map :name)
-               (remove (partial = "N/A"))
-               set)})
+  (let [evidence-groups (->> (map :id (:variants g))
+                             (map #(url->json :civic (format "/api/variants/%s" %)))
+                             (mapcat :evidence_items))]
+    {:origin #{"civic"}
+     :url (format "https://civicdb.org//#/events/genes/%s/summary" (:id g))
+     :diseases (->> (map :disease evidence-groups)
+                    (map :name)
+                    (remove (partial = "N/A"))
+                    set)
+     :drugs (->> (mapcat :drugs evidence-groups)
+                 (map :name)
+                 (remove (partial = "N/A"))
+                 set)}))
 
 (defn- gene->build
   "Retrieve human genome build information from CIViC gene object.
@@ -95,18 +101,18 @@
 (defn gene->bed
   "Convert gene into a BED-ready output with metadata encoded in the name field."
   [options g]
+  (println (:name g))
   (let [g-info (merge (gene-info :human (:build options) (:name g))
                       (variant-summary g))]
-    (-> (select-keys g-info [:assembly_name :seq_region_name :start :end])
-        (assoc :name {:support (select-keys g-info [:url :variant-groups :origin :drugs])
-                      :name #{(:display_name g-info)}}))))
+    (when (:assembly_name g-info)
+      (-> (select-keys g-info [:assembly_name :seq_region_name :start :end])
+          (assoc :name {:support (select-keys g-info [:url :diseases :origin :drugs])
+                        :name #{(:display_name g-info)}})))))
 
 (defn- gene-w-no-info?
   "Check if an input gene has no information"
   [g]
   (and (empty? (:variants g))
-       (empty? (:variant_groups g))
-       (empty? (:sources g))
        (nil? (:clinical_description g))))
 
 (defn curdb->bed
@@ -117,7 +123,7 @@
                                                   (clj-time.core/now)))]
     (itx/with-tx-file [tx-out-file out-file]
       (with-open [wtr (io/writer (BlockCompressedOutputStream. (io/file tx-out-file)))]
-        (doseq [g (->> (genes-hack)
+        (doseq [g (->> (genes)
                        (remove gene-w-no-info?)
                        (map (partial gene->bed options))
                        (sort-by (juxt :seq_region_name :start)))]
@@ -127,7 +133,7 @@
     (utils/bgzip-index out-file)))
 
 (defn- usage [options-summary]
-  (->> ["Create file of priority regions with genes from current CIViC database (https://civic.genome.wustl.edu)"
+  (->> ["Create file of priority regions with genes from current CIViC database (https://civicdb.org)"
         ""
         "Usage: bcbio-prioritize create-civic"
         ""

@@ -1,15 +1,16 @@
-(defproject bcbio.prioritize "0.0.8"
+(defproject bcbio.prioritize "0.0.9-SNAPSHOT"
   :description "Prioritize small variants, structural variants and coverage based on biological inputs"
   :url "https://github.com/chapmanb/bcbio.prioritize"
   :license {:name "MIT" :url "http://www.opensource.org/licenses/mit-license.html"}
-  :dependencies [[org.clojure/clojure "1.7.0"]
+  :dependencies [[org.clojure/clojure "1.10.0"]
                  [org.clojure/algo.generic "0.1.2"]
                  [org.clojure/data.csv "0.1.2"]
                  [semantic-csv "0.1.0"]
                  [org.clojure/tools.cli "0.3.1"]
                  [clj-biosequence "0.2.6"]
-                 [clj-http "1.1.1"]
-                 [clj-time "0.11.0"]
+                 [clj-http "3.9.1"]
+                 [cheshire "5.8.1"]
+                 [clj-time "0.15.1"]
                  [slingshot "0.12.2"]
                  [com.taoensso/timbre "3.4.0"]
                  [gavagai "0.3.2"]
