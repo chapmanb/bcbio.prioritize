@@ -38,7 +38,7 @@ To update the prioritization file from the [CIViC](https://civicdb.org) database
 of variant interpretations:
 
     lein run create-civic --build GRCh37
-    lein run create-civic --build hg38
+    lein run create-civic --build GRCh38
 
 ## License
 

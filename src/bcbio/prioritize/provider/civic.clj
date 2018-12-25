@@ -102,7 +102,7 @@
   "Convert gene into a BED-ready output with metadata encoded in the name field."
   [options g]
   (println (:name g))
-  (let [g-info (merge (gene-info :human (:build options) (:name g))
+  (let [g-info (merge (gene-info :human (keyword (:build options)) (:name g))
                       (variant-summary g))]
     (when (:assembly_name g-info)
       (-> (select-keys g-info [:assembly_name :seq_region_name :start :end])
@@ -126,6 +126,7 @@
         (doseq [g (->> (genes)
                        (remove gene-w-no-info?)
                        (map (partial gene->bed options))
+                       (remove nil?)
                        (sort-by (juxt :seq_region_name :start)))]
           (.write wtr (str (string/join "\t" (map (update-in g [:name] pr-str)
                                                   [:seq_region_name :start :end :name]))
