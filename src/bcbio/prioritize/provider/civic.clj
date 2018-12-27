@@ -82,6 +82,7 @@
                              (mapcat :evidence_items))]
     {:origin #{"civic"}
      :url (format "https://civicdb.org//#/events/genes/%s/summary" (:id g))
+     :variants (set (map :name (:variants g)))
      :diseases (->> (map :disease evidence-groups)
                     (map :name)
                     (remove (partial = "N/A"))
@@ -106,7 +107,7 @@
                       (variant-summary g))]
     (when (:assembly_name g-info)
       (-> (select-keys g-info [:assembly_name :seq_region_name :start :end])
-          (assoc :name {:support (select-keys g-info [:url :diseases :origin :drugs])
+          (assoc :name {:support (select-keys g-info [:url :diseases :origin :drugs :variants])
                         :name #{(:display_name g-info)}})))))
 
 (defn- gene-w-no-info?
