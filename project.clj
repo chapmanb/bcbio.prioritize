@@ -14,6 +14,7 @@
                  [gavagai "0.3.2"]
                  [bcbio.variation.recall "0.2.0"]
                  [com.github.samtools/htsjdk "1.140"]
-                 [bcbio.run "0.0.6"]]
+                 [bcbio.run "0.0.6"]
+                 [dk.ative/docjure "1.13.0"]]
   :profiles {:uberjar {:aot [bcbio.prioritize.main]}}
   :main ^:skip-aot bcbio.prioritize.main)
