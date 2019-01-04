@@ -1,0 +1,20 @@
+;; Hodur data model for stratified variant priors
+;; Converted into datomic schema as part of conformity transactional creation of databases
+
+[^{:datomic/tag true}
+ default
+
+ Gene
+ [^{:type String} name
+  ^{:type Location :cardinality [0 n]} location
+  ^{:type Evidence :cardinality [0 n]} evidence]
+ Evidence
+ [^{:type String} origin
+  ^{:type String :cardinality [0 n]} diseases
+  ^{:type String :cardinality [0 n]} drugs
+  ^{:type String} variant-type]
+ Location
+ [^String build
+  ^String contig
+  ^Int start
+  ^Int end]]

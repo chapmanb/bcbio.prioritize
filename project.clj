@@ -15,6 +15,10 @@
                  [bcbio.variation.recall "0.2.0"]
                  [com.github.samtools/htsjdk "1.140"]
                  [bcbio.run "0.0.6"]
-                 [dk.ative/docjure "1.13.0"]]
+                 [dk.ative/docjure "1.13.0"]
+                 [com.datomic/datomic-free "0.9.5697"]
+                 [io.rkn/conformity "0.5.1" :exclusions [com.datomic/datomic-free]]
+                 [hodur/engine "0.1.5"]
+                 [hodur/datomic-schema "0.1.0"]]
   :profiles {:uberjar {:aot [bcbio.prioritize.main]}}
   :main ^:skip-aot bcbio.prioritize.main)
