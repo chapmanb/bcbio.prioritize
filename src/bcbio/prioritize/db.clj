@@ -37,22 +37,26 @@
    :location/start (:start l)
    :location/end (:end l)})
 
-(defn- prepare-gene-data
-  [g-in loc-fn db]
-  (let [locs (map prepare-location-data (loc-fn (:name g-in)))
-        evs (map prepare-evidence-data (:evidence g-in))
-        g {:db/id (d/tempid :db.part/user)
-           :gene/name (:name g-in)
-           :gene/location (map :db/id locs)
-           :gene/evidence (map :db/id evs)}]
-    (concat [g] locs evs)))
-
 (defn get-gene
-  "Retrieve an existing gene from the database, adding annotations on top."
-  [g-in db]
-  (println (d/q '[:find (pull ?g [:gene/name :gene/location :gene/evidence])
-                  :where [?g :gene/name g-in]]
-                db)))
+  "Retrieve an existing gene from the database, allowing adding additional evidence."
+  [db g-in]
+  (ffirst (d/q '[:find (pull ?g [*])
+                 :in $ ?name
+                 :where [?g :gene/name ?name]]
+               db g-in)))
+
+(defn- prepare-gene-data
+  "Prepare gene, updating existing with additional evidence or creating new."
+  [g-in loc-fn db]
+  (let [evs (map prepare-evidence-data (:evidence g-in))]
+    (if-let [g (get-gene db g-in)]
+      (concat [(update-in g [:gene/evidence] #(concat % evs))] evs)
+      (let [locs (map prepare-location-data (loc-fn (:name g-in)))
+            g {:db/id (d/tempid :db.part/user)
+               :gene/name (:name g-in)
+               :gene/location (map :db/id locs)
+               :gene/evidence (map :db/id evs)}]
+        (concat [g] locs evs)))))
 
 (defn load-data
   "Load gene evidence data into prepared database."
