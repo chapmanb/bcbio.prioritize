@@ -24,8 +24,8 @@
   [e]
   {:db/id (d/tempid :db.part/user)
    :evidence/origin (:origin e)
-   :evidence/diseases (:diseases e)
-   :evidence/drugs (:drugs e)
+   :evidence/diseases (or (:diseases e) [])
+   :evidence/drugs (or (:drugs e) [])
    :evidence/variant-type (:variant e)})
 
 (defn- prepare-location-data
@@ -38,16 +38,25 @@
    :location/end (:end l)})
 
 (defn- prepare-gene-data
-  [g-in]
-  (let [locs (map prepare-location-data (:location g-in))
+  [g-in loc-fn db]
+  (let [locs (map prepare-location-data (loc-fn (:name g-in)))
         evs (map prepare-evidence-data (:evidence g-in))
         g {:db/id (d/tempid :db.part/user)
            :gene/name (:name g-in)
            :gene/location (map :db/id locs)
            :gene/evidence (map :db/id evs)}]
-    (concat g locs evs)))
+    (concat [g] locs evs)))
+
+(defn get-gene
+  "Retrieve an existing gene from the database, adding annotations on top."
+  [g-in db]
+  (println (d/q '[:find (pull ?g [:gene/name :gene/location :gene/evidence])
+                  :where [?g :gene/name g-in]]
+                db)))
 
 (defn load-data
   "Load gene evidence data into prepared database."
-  [conn gs]
-  (c/ensure-conforms conn {:d {:txes [(mapcat prepare-gene-data gs)]}} [:d]))
+  [conn gs loc-fn]
+  (let [db (d/db conn)]
+    (c/ensure-conforms conn {:d {:txes [(mapcat #(prepare-gene-data % loc-fn db) gs)]}} [:d])
+    db))
