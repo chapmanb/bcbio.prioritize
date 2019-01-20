@@ -15,7 +15,8 @@
    :simple-known (str (io/file (:data dirs) "annotation" "binned-simple.bed"))
    :simple-known-bed6 (str (io/file (:data dirs) "annotation" "binned-simple2.bed"))
    :call (str (io/file (:data dirs) "calls" "ex1.bed.gz"))
-   :call-vcf (str (io/file (:data dirs) "calls" "ex2.vcf.gz"))})
+   :call-vcf (str (io/file (:data dirs) "calls" "ex2.vcf.gz"))
+   })
 
 (deftest known-test
   (fsp/remove-path (:work dirs))

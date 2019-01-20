@@ -2,7 +2,7 @@
   "Genes found in pharmGKB based on selection from ancient DNA sequencing"
   (:import [htsjdk.samtools.util BlockCompressedOutputStream])
   (:require [bcbio.prioritize.provider.civic :as civic]
-            [bcbio.prioritize.db :as db]
+            [bcbio.prioritize.db :as pdb]
             [bcbio.run.itx :as itx]
             [clj-time.core]
             [clj-time.format]
@@ -55,11 +55,6 @@
                                                   [:seq_region_name :start :end :name]))
                            "\n")))) )))
 
-(defn- get-locations
-  "Retrieve locations based on gene name for builds of interest"
-  [options name]
-  (map #(civic/gene-info (:genome options) % name) (:builds options)))
-
 (defn- reorder-evidence
   "Reorder evidence and gene names for database storage"
   [orig]
@@ -70,6 +65,5 @@
 (defn excel->db
   "Load gene information from excel summary into queryable database."
   [in-file]
-  (let [options {:builds [:GRCh37 :GRCh38] :genome :human}
-        conn (db/init)]
-    (db/load-data conn (map reorder-evidence (excel->genes in-file)) (partial get-locations options))))
+  (let [options {:builds [:GRCh37 :GRCh38] :genome :human}]
+    (pdb/load-data pdb/conn (map reorder-evidence (excel->genes in-file)) (partial civic/get-locations options))))

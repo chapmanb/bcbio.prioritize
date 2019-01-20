@@ -3,6 +3,7 @@
    https://griffithlab.github.io/civic-api-docs/"
   (:import [htsjdk.samtools.util BlockCompressedOutputStream])
   (:require [bcbio.prioritize.utils :as utils]
+            [bcbio.prioritize.db :as pdb]
             [bcbio.run.clhelp :as clhelp]
             [bcbio.run.itx :as itx]
             [clj-http.client :as client]
@@ -54,6 +55,11 @@
     (try+
      (url->json loc (format "lookup/symbol/%s/%s?content-type=application/json" species-url gene-name))
      (catch [:status 400] {}))))
+
+(defn get-locations
+  "Retrieve locations based on gene name for builds of interest"
+  [options name]
+  (map #(gene-info (:genome options) % name) (:builds options)))
 
 (defn gene
   "Retrieve a single gene from CIViC"
@@ -133,6 +139,48 @@
                                                   [:seq_region_name :start :end :name]))
                            "\n")))))
     (utils/bgzip-index out-file)))
+
+(defn- reorder-evidence
+  "Reorder evidence and gene names for database storage"
+  [orig]
+  (println orig)
+  {:name (:gene orig)
+   :evidence [{:origin "ancient" :variant "sweep"
+               :diseases (:disease orig) :drugs (:drug orig)}]})
+
+(defn- prepare-evidence-variant
+  "Prepare evidence for a single variant"
+  [v]
+  (let [v-info (url->json :civic (format "/api/variants/%s" (:id v)))]
+    {:origin "civic"
+     :variant (:name v)
+     :diseases (->> (:evidence_items v-info)
+                    (map :disease)
+                    (map :name)
+                    (remove (partial = "N/A"))
+                    set)
+     :drugs (->> (:evidence_items v-info)
+                 (mapcat :drugs)
+                 (map :name)
+                 (remove (partial = "N/A"))
+                 set)}))
+
+(defn- prepare-evidence-gene
+  "Organize gene variants into evidence items for prioritization"
+  [g]
+  {:name (:name g)
+   :evidence (map prepare-evidence-variant (:variants g))})
+
+
+(defn curdb->db
+  "Load the current CIViC database into datomic"
+  []
+  (let [options {:builds [:GRCh37 :GRCh38] :genome :human}]
+    (pdb/load-data pdb/conn
+                   (->> (genes)
+                        (remove gene-w-no-info?)
+                        (map prepare-evidence-gene))
+                   (partial get-locations options))))
 
 (defn- usage [options-summary]
   (->> ["Create file of priority regions with genes from current CIViC database (https://civicdb.org)"

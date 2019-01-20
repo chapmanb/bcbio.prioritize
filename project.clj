@@ -16,6 +16,8 @@
                  [com.github.samtools/htsjdk "1.140"]
                  [bcbio.run "0.0.6"]
                  [dk.ative/docjure "1.13.0"]
+                 [yogthos/config "1.1.1"]
+                 [mount "0.1.15"]
                  [com.datomic/datomic-free "0.9.5697"]
                  [io.rkn/conformity "0.5.1" :exclusions [com.datomic/datomic-free]]
                  [hodur/engine "0.1.5"]
