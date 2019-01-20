@@ -1,0 +1,7 @@
+;; Configuration inputs, can override with
+;; -Dconf=your-config.edn
+;; using https://github.com/yogthos/config
+{:datomic
+ ;{:uri "datomic:free://localhost:4334/varprior"}
+ {:uri "datomic:mem://varprior"}
+}
